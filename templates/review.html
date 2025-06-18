@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>💬 이용 후기</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .review-card {
+      background-color: #ffffff;
+      border: 1px solid #e3e3e3;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .review-card:hover {
+      background-color: #f9f9f9;
+    }
+    .review-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .review-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container mt-5">
+    <h3 class="mb-4 text-primary">💬 이용 후기</h3>
+
+    <!-- 정렬 옵션 -->
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+      <div>
+        <label for="sortSelect" class="form-label">정렬 기준:</label>
+        <select id="sortSelect" class="form-select" style="width: 200px;" onchange="sortReviews(this.value)">
+          <option value="latest" {% if sort == 'latest' %}selected{% endif %}>최신순</option>
+          <option value="popular" {% if sort == 'popular' %}selected{% endif %}>인기순</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 후기 작성 (로그인된 사용자만 가능) -->
+    {% if user %}
+    <form method="POST" class="mt-4 mb-4">
+      <div class="mb-3">
+        <label for="reviewText" class="form-label">후기 작성</label>
+        <textarea name="review" class="form-control" rows="3" placeholder="후기를 작성하세요..." required></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">📩 후기 등록</button>
+    </form>
+    {% else %}
+    <p class="text-muted mt-4">로그인 후 후기를 작성할 수 있습니다.</p>
+    {% endif %}
+
+<!-- 후기 목록 -->
+<div id="review-list">
+  {% for review in reviews %}
+    <div class="review-card mb-3 p-3">
+      <div class="d-flex justify-content-between">
+        <div>
+          <h5 class="mb-1">{{ review['nickname'] }}</h5>
+          <small class="text-muted">{{ review['created_at'] }}</small>
+        </div>
+        <div class="review-actions">
+          ❤️ <span class="badge bg-danger">{{ review['likes'] }}</span>
+          <form action="/like_review/{{ review['id'] }}" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-danger">좋아요</button>
+          </form>
+        </div>
+      </div>
+
+      <p class="review-text mt-2" id="review-text-{{ review['id'] }}">{{ review['review'] }}</p>
+
+      {% if user and user['id'] == review['user_id'] %}
+      <div class="mt-2">
+        <button class="btn btn-sm btn-outline-primary" onclick="enableEdit({{ review['id'] }}, '{{ review['review'] }}')">✏️ 수정</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="confirmDelete({{ review['id'] }})">🗑️ 삭제</button>
+      </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="text-muted text-center">등록된 후기가 없습니다.</p>
+  {% endfor %}
+</div>
+
+
+  <!-- 삭제 확인 모달 -->
+  <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">🗑️ 후기 삭제</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          정말로 이 후기를 삭제하시겠습니까?
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">삭제</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function sortReviews(order) {
+      window.location.href = "/review?sort=" + order;
+    }
+
+    let deleteReviewId = null;
+    
+    function confirmDelete(reviewId) {
+      deleteReviewId = reviewId;
+      const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+      deleteModal.show();
+    }
+
+    document.getElementById("confirmDeleteBtn").addEventListener("click", function() {
+      if (deleteReviewId) {
+        fetch(`/delete_review/${deleteReviewId}`, {
+          method: "POST"
+        }).then(response => {
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            alert("삭제 중 오류가 발생했습니다.");
+          }
+        });
+      }
+    });
+
+   function enableEdit(reviewId, currentText) {
+   const reviewText = document.getElementById(`review-text-${reviewId}`);
+
+    if (!reviewText) {
+      console.error(`❌ 리뷰 텍스트를 찾을 수 없습니다. reviewId: ${reviewId}`);
+      alert("리뷰를 수정할 수 없습니다. 페이지를 다시 로드해보세요.");
+      return;
+    }
+
+      // 원래 텍스트 백업
+      const originalText = reviewText.textContent;
+
+      // 수정 입력 폼으로 변경
+      reviewText.innerHTML = `
+        <textarea id="edit-text-${reviewId}" class="form-control mb-2" rows="3">${currentText}</textarea>
+        <div class="mt-2">
+          <button class="btn btn-sm btn-success" onclick="submitEdit(${reviewId})">✅ 저장</button>
+          <button class="btn btn-sm btn-secondary" onclick="cancelEdit(${reviewId}, '${originalText}')">❌ 취소</button>
+        </div>
+      `;
+    }
+
+    function cancelEdit(reviewId, originalText) {
+      const reviewText = document.getElementById(`review-text-${reviewId}`);
+      if (reviewText) {
+        reviewText.textContent = originalText;
+      } else {
+        console.error(`❌ 리뷰 텍스트를 찾을 수 없습니다. reviewId: ${reviewId}`);
+      }
+    }
+
+    function submitEdit(reviewId) {
+      const newText = document.getElementById(`edit-text-${reviewId}`).value.trim();
+
+      if (newText === "") {
+        alert("후기 내용은 비어 있을 수 없습니다.");
+        return;
+      }
+
+      fetch(`/edit_review/${reviewId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ review: newText })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`서버 오류: ${response.status} - ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.success) {
+          const reviewText = document.getElementById(`review-text-${reviewId}`);
+          reviewText.textContent = newText;
+          alert("후기가 수정되었습니다.");
+        } else {
+          alert("후기 수정에 실패했습니다: " + data.message);
+        }
+      })
+      .catch(error => {
+        console.error("❌ Error:", error);
+        alert("후기 수정 중 오류가 발생했습니다. 서버 오류를 확인하세요.");
+      });
+    }
+
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

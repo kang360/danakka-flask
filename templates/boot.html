@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>다낚아 낚시 예약 도우미</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f4f7fc;
+    }
+    .navbar {
+      background: #0d6efd;
+    }
+    .navbar-brand img {
+      width: 50px;
+    }
+    .card {
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    .card-header {
+      background: #007bff;
+      color: #fff;
+      font-weight: bold;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+    }
+    .btn-custom {
+      background-color: #0d6efd;
+      color: #fff;
+      border: none;
+    }
+    .btn-custom:hover {
+      background-color: #0b5ed7;
+    }
+  </style>
+</head>
+<body>
+
+ <!-- 상단 네비게이션 -->
+<nav class="navbar navbar-expand-lg navbar-dark px-4">
+  <a href="/" class="navbar-brand d-flex align-items-center">
+    <img src="{{ url_for('static', filename='nuiqulb.png') }}" alt="로고">
+    <span class="fs-4 ms-2">다낚아 낚시 예약 도우미</span>
+  </a>
+  <div class="ms-auto d-flex align-items-center">
+    {% if session.user %}
+      <span class="text-white me-3">👋 {{ session.user.nickname }} 님</span>
+      <a href="/mypage" class="btn btn-light btn-sm me-2">👤 마이페이지</a>
+      <a href="/logout" class="btn btn-outline-light btn-sm">🚪 로그아웃</a>
+    {% else %}
+      <a href="/login" class="btn btn-light btn-sm me-2">🔐 로그인</a>
+      <a href="/register" class="btn btn-outline-light btn-sm">📝 회원가입</a>
+    {% endif %}
+  </div>
+</nav>
+
+  <!-- 본문 -->
+  <div class="container mt-4">
+    <div class="row">
+      <!-- 좌측 사이드바 -->
+      <div class="col-md-3 mb-3">
+        <div class="card p-3">
+          <h5 class="text-primary mb-3">🌤 기상 정보</h5>
+          <a href="https://www.weather.go.kr/" target="_blank" class="btn btn-warning w-100 mb-2">기상청 바로가기</a>
+          <h5 class="text-primary mt-4 mb-2">🎣 예약 검색</h5>
+          <input type="date" id="dateInput" class="form-control mb-2">
+          <button onclick="fetchReservations()" class="btn btn-custom w-100">🔍 예약 검색</button>
+        </div>
+      </div>
+
+      <!-- 중앙 예약 결과 영역 -->
+      <div class="col-md-6">
+        <div id="resultArea" class="card p-4">
+          <h2 class="mb-3">🎣 전국 선상 낚시 예약 정보</h2>
+          <p class="text-muted">날짜를 선택하고 좌측에서 "예약 검색"을 눌러주세요.</p>
+        </div>
+      </div>
+
+      <!-- 우측 사이드바 (이용 후기) -->
+      <div class="col-md-3 mb-3">
+        <div class="card p-3">
+          <h5 class="text-primary mb-3">💬 이용 후기</h5>
+          <p class="text-muted">다른 사용자들의 낚시 후기와 경험을 확인하세요.</p>
+          <button class="btn btn-success w-100" onclick="goToReview()">💬 후기 보기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 하단 푸터 -->
+  <footer class="bg-dark text-white text-center py-3 mt-5">
+    <p class="mb-1">📧 Email: danakkafishing@naver.com</p>
+    <small>&copy; 2025 다낚아 낚시 예약 도우미. All rights reserved.</small>
+  </footer>
+
+  <!-- JavaScript: 예약 정보 가져오기 -->
+  <script>
+    function fetchReservations() {
+      const date = document.getElementById("dateInput").value;
+      if (!date) return alert("날짜를 선택해주세요.");
+
+      fetch(`/api/reservations?date=${date}`)
+        .then(res => res.json())
+        .then(data => {
+          let html = `
+            <div class="card mt-3">
+              <div class="card-header">🚤 예약 현황 (${date})</div>
+              <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0 w-100">
+                  <thead class="table-dark">
+                    <tr>
+                      <th>지역</th><th>선박</th>
+                      <th>물때</th><th>어종</th><th>남은자리</th><th>예약</th>
+                      <th>알림</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+
+          if (data.length === 0) {
+            html += `<tr><td colspan="7" class="text-center text-muted">해당 날짜에 예약 정보가 없습니다.</td></tr>`;
+          } else {
+            data.forEach(row => {
+              html += `<tr>
+                <td>${row.zone}</td>
+                <td>${row.ship_name}</td>
+                <td>${row.wave_power}</td>
+                <td>${row.fish_name}</td>
+                <td>${row.reservation}</td>
+                <td><a href="${row.booking_url}" target="_blank" class="btn btn-sm btn-success">이동</a></td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="requestAlarm('${row.date}', '${row.zone}', '${row.ship_name}')">🔔요청</button></td>
+              </tr>`;
+            });
+          }
+
+          html += `</tbody></table></div></div>`;
+          document.getElementById("resultArea").innerHTML = html;
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById("resultArea").innerHTML =
+            `<div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>`;
+        });    
+    }
+
+    function goToReview() {
+      location.href = "/review";
+    }
+
+    function requestAlarm(date, zone, shipName) {
+  // ✅ GMT 형식 날짜를 YYYY-MM-DD 형식으로 변환
+  if (date.includes("GMT")) {
+    const dateObj = new Date(date);
+    date = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD 형식으로 변환
+  }
+
+  console.log("✅ 요청 클릭됨");
+  console.log("✅ 날짜:", date);
+  console.log("✅ 지역:", zone);
+  console.log("✅ 선박:", shipName);
+
+  fetch('/alarm_request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ 
+      date: date,
+      zone: zone,
+      ship_name: shipName 
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log("✅ 서버 응답:", data);
+    if (data.success) {
+      alert(data.message);
+      window.location.reload();
+    } else {
+      alert(data.message);
+    }
+  })
+  .catch(error => {
+    console.error("❌ 요청 오류:", error);
+    alert("알림 등록 중 오류가 발생했습니다.");
+  });
+}
+
+  </script>
+</body>
+</html>
