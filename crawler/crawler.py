@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine ,text
 from dotenv import load_dotenv
 import os
 import re
@@ -33,7 +33,7 @@ def create_table():
     with engine.connect() as conn:
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS cruise_schedule (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 zone VARCHAR(100) NOT NULL,
                 site_name VARCHAR(100) NOT NULL,
                 ship_name VARCHAR(100) NOT NULL,
