@@ -13,20 +13,23 @@ current_month = datetime.now().month
 load_dotenv()
 
 # ✅ MySQL 연결 설정
-def connect_mysql():
-    user = os.getenv("MYSQL_USER")
-    password = os.getenv("MYSQL_PASSWORD")
-    host = os.getenv("MYSQL_HOST")
-    database = os.getenv("MYSQL_DATABASE")
-    engine = create_engine(
-        f"mysql+pymysql://{user}:{password}@{host}/{database}",
-        echo=False  # SQL 쿼리 디버깅 활성화
-    )
+def connect_postgres():
+    user = os.getenv("PG_USER")
+    password = os.getenv("PG_PASSWORD")
+    host = os.getenv("PG_HOST")
+    port = os.getenv("PG_PORT", 5432)
+    database = os.getenv("PG_DATABASE")
+    sslmode = os.getenv("PG_SSL", "require")
+
+    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    engine = create_engine(url, echo=False)
     return engine
+
+
 
 # ✅ MySQL 테이블 생성
 def create_table():
-    engine = connect_mysql()
+    engine = connect_postgres()
     with engine.connect() as conn:
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS cruise_schedule (
@@ -293,7 +296,7 @@ def crawl_site_bigboss(site_name, base_url):
 # ✅ 크롤링 및 MySQL 저장 함수
 # ✅ 크롤링 및 MySQL 저장 함수
 def crawl_and_save_to_mysql():
-    engine = connect_mysql()
+    engine = connect_postgres()
     create_table()  # ✅ 테이블 생성 확인
 
     # 크롤링할 사이트 목록
