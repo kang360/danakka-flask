@@ -27,7 +27,7 @@ def connect_postgres():
 
 
 
-# ✅ MySQL 테이블 생성
+# create_table() 이후에 실제로 테이블이 있는지 바로 확인
 def create_table():
     engine = connect_postgres()
     with engine.connect() as conn:
@@ -45,6 +45,7 @@ def create_table():
                 UNIQUE (zone, site_name, ship_name, date)
             )
         '''))
+        conn.commit()  # << PostgreSQL에서는 명시적으로 커밋 필요할 수 있음
         print("✅ 테이블 생성 완료")
 # ✅ 날짜 형식 변환 함수 (YYYY-MM-DD)
 def format_date(raw_date, year):
