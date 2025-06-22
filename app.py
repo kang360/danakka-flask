@@ -517,7 +517,8 @@ def send_alert_email(to_email, date, zone, ship_name, booking_url):
 
 # ✅ 예약 알림 확인 및 이메일 발송
 def check_reservation_alerts():
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute("SELECT id, date, zone, ship_name, email, user_id FROM alarms")
