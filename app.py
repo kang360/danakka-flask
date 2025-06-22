@@ -150,7 +150,8 @@ def get_reservations():
     date_param = request.args.get('date')
     print(f"📅 요청 날짜: {date_param} ({type(date_param)})")
 
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
