@@ -1,5 +1,4 @@
 from flask import Flask, render_template, jsonify, request, redirect, session, flash
-import mysql.connector
 import datetime
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -43,7 +42,7 @@ app.config['MAIL_DEFAULT_SENDER'] = 'danakkafishing@naver.com'
 
 mail = Mail(app)
 
-engine = create_engine(f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DATABASE')}")
+#engine = create_engine(f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DATABASE')}")
 
 @app.route("/crawl")
 def trigger():
