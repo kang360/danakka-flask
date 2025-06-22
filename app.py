@@ -12,6 +12,7 @@ from flask import Flask, send_from_directory, render_template
 from crawler.crawler import run_crawler
 from sqlalchemy import create_engine
 import os
+import psycopg2.extras
 
 app = Flask(__name__)
 CORS(app)
@@ -56,15 +57,17 @@ def trigger():
 def home():
     return render_template('boot.html')
 
-# ✅ MySQL 연결 함수
-def connect_mysql():
-    return mysql.connector.connect(
-        host='localhost',
-        user='root',
-        password=os.getenv('MYSQL_PASSWORD'),
-        database=os.getenv('MYSQL_DATABASE'),
-        port=3306
-    )
+def connect_postgres():
+    user = os.getenv("PG_USER")
+    password = os.getenv("PG_PASSWORD")
+    host = os.getenv("PG_HOST")
+    port = os.getenv("PG_PORT", 5432)
+    database = os.getenv("PG_DATABASE")
+    sslmode = os.getenv("PG_SSL", "require")
+
+    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    engine = create_engine(url, echo=False)
+    return engine
  
 # ✅ 로그인
 @app.route('/login', methods=['GET', 'POST'])
@@ -73,8 +76,9 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        conn = connect_mysql()
-        cursor = conn.cursor(dictionary=True)
+        
+        conn = connect_postgres()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nickname, email, password FROM users WHERE email=%s", (email,))
         user = cursor.fetchone()
 
@@ -94,8 +98,8 @@ def mypage():
         return redirect('/login')
 
     user_id = session['user']['id']
-    conn = connect_mysql()
-    cursor = conn.cursor(dictionary=True)
+    conn = connect_postgres()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # ✅ 회원 정보 수정 처리
     if request.method == 'POST':
@@ -133,7 +137,7 @@ def mypage():
         flash("회원 정보가 수정되었습니다.", "success")
 
     # ✅ 예약 알림 조회 (로그인된 사용자)
-    cursor.execute("SELECT id, user_id, DATE_FORMAT(date, '%Y-%m-%d') AS date, zone, ship_name FROM alarms WHERE user_id = %s ORDER BY date ASC", (user_id,))
+    cursor.execute("SELECT id, user_id, TO_CHAR(date, 'YYYY-MM-DD') AS date, zone, ship_name FROM alarms WHERE user_id = %s ORDER BY date ASC", (user_id,))
     alarms = cursor.fetchall()
     conn.close()
 
@@ -147,8 +151,8 @@ def get_reservations():
     date_param = request.args.get('date')
     print(f"📅 요청 날짜: {date_param} ({type(date_param)})")
 
-    conn = connect_mysql()
-    cursor = conn.cursor(dictionary=True)
+    conn = connect_postgres()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
         # 날짜가 전달된 경우 필터링
@@ -173,7 +177,7 @@ def get_reservations():
         columns = ['id','zone', 'site_name', 'ship_name', 'date', 'wave_power', 'fish_name', 'reservation', 'booking_url']
         results = [dict(zip(columns, row.values())) for row in rows]
     
-    except mysql.connector.Error as db_err:
+    except Exception as db_err:
         print(f"❌ DB 오류: {db_err}")
         return jsonify({"error": "DB 오류가 발생했습니다."}), 500
     finally:
@@ -219,7 +223,7 @@ def register():
 
         hashed_password = generate_password_hash(password)
 
-        conn = connect_mysql()
+        conn = connect_postgres()
         cursor = conn.cursor()
 
         # 이메일과 닉네임 중복 체크
@@ -249,7 +253,7 @@ def delete_account():
 
     user_id = session['user']['id']
 
-    conn = connect_mysql()
+    conn = connect_postgres()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()
@@ -285,7 +289,7 @@ def reviews():
         user_id = session['user']['id']
         nickname = session['user']['nickname']
 
-        conn = connect_mysql()
+        conn = connect_postgres()
         cursor = conn.cursor()
         cursor.execute("INSERT INTO reviews (user_id, nickname, review, created_at) VALUES (%s, %s, %s, NOW())",
                        (user_id, nickname, review_text))
@@ -297,8 +301,8 @@ def reviews():
 
     # 후기 조회 (정렬 기준 적용)
     sort = request.args.get('sort', 'latest')
-    conn = connect_mysql()
-    cursor = conn.cursor(dictionary=True)
+    conn = connect_postgres()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     if sort == 'popular':
         cursor.execute("SELECT id, user_id, nickname, review, created_at, likes FROM reviews ORDER BY likes DESC, created_at DESC")
@@ -321,7 +325,7 @@ def like_review(review_id):
 
     user_id = session['user']['id']
 
-    conn = connect_mysql()
+    conn = connect_postgres()
     cursor = conn.cursor()
 
     # 사용자가 이미 좋아요를 눌렀는지 확인
@@ -355,7 +359,7 @@ def edit_review(review_id):
         if not new_review:
             return jsonify({"success": False, "message": "후기 내용이 비어있습니다."}), 400
 
-        conn = connect_mysql()
+        conn = connect_postgres()
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE reviews SET review = %s WHERE id = %s AND user_id = %s",
@@ -377,7 +381,7 @@ def delete_review(review_id):
         flash("로그인이 필요합니다.", "warning")
         return redirect('/login')
 
-    conn = connect_mysql()
+    conn = connect_postgres()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM reviews WHERE id = %s AND user_id = %s", (review_id, session['user']['id']))
     conn.commit()
@@ -408,7 +412,7 @@ def alarm_request():
         if not date or not zone or not ship_name:
             return jsonify({"message": "필수 데이터가 누락되었습니다."}), 400
 
-        conn = connect_mysql()
+        conn = connect_postgres()
         cursor = conn.cursor()
 
         # ✅ 사용자 알림 최대 3개 제한 확인
@@ -454,7 +458,7 @@ def delete_alarm(alarm_id):
     user_id = session['user']['id']
 
     try:
-        conn = connect_mysql()
+        conn = connect_postgres()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM alarms WHERE id = %s AND user_id = %s", (alarm_id, user_id))
         if cursor.rowcount == 0:
@@ -474,7 +478,7 @@ def delete_alarm(alarm_id):
 
 # ✅ 예약 상태 확인 함수
 def check_reservation_status(date, zone, ship_name):
-    conn = connect_mysql()
+    conn = connect_postgres()
     cursor = conn.cursor()
 
     # 예약 상태와 URL 확인 (DB에서 확인)
@@ -514,8 +518,8 @@ def send_alert_email(to_email, date, zone, ship_name, booking_url):
 
 # ✅ 예약 알림 확인 및 이메일 발송
 def check_reservation_alerts():
-    conn = connect_mysql()
-    cursor = conn.cursor(dictionary=True)
+    conn = connect_postgres()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute("SELECT id, date, zone, ship_name, email, user_id FROM alarms")
     alarms = cursor.fetchall()
