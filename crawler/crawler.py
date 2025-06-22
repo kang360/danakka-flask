@@ -21,7 +21,7 @@ def connect_postgres():
     database = os.getenv("PG_DATABASE")
     sslmode = os.getenv("PG_SSL", "require")
 
-    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    url = f"postgresql+psycopg2://{user}:{password}@{host}/{database}?sslmode={sslmode}"
     engine = create_engine(url, echo=False)
     return engine
 
