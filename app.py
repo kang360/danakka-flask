@@ -9,6 +9,9 @@ import threading
 import time
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory, render_template
+from crawler.crawler import run_crawler
+from sqlalchemy import create_engine
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -39,6 +42,15 @@ app.config['MAIL_DEFAULT_SENDER'] = 'danakkafishing@naver.com'
 
 mail = Mail(app)
 
+engine = create_engine(f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DATABASE')}")
+
+@app.route("/crawl")
+def trigger():
+    token = request.args.get("token")
+    if token != os.getenv("CRAWL_SECRET_TOKEN"):
+        return "❌ Unauthorized", 403
+    run_crawler()
+    return "✅ 크롤링 완료!"
 # 루트 경로: 홈페이지
 @app.route('/')
 def home():
@@ -51,7 +63,7 @@ def connect_mysql():
         user='root',
         password=os.getenv('MYSQL_PASSWORD'),
         database=os.getenv('MYSQL_DATABASE'),
-        port=3307
+        port=3306
     )
  
 # ✅ 로그인
