@@ -336,13 +336,9 @@ def crawl_and_save_to_mysql():
                     print("✅ 기존 데이터 전체 삭제 및 ID 초기화")
                     first_site = False  # 이후 사이트에서는 삭제하지 않음
 
-                # ✅ 새 데이터 삽입
-                for row in site_data:
-                    conn.execute(text('''
-                        INSERT INTO cruise_schedule 
-                        (zone, site_name, ship_name, date, wave_power, fish_name, reservation, booking_url)
-                        VALUES (:zone, :site_name, :ship_name, :date, :wave_power, :fish_name, :reservation, :booking_url)
-                    '''), {
+                # ✅ 배치 insert를 위해 dict 리스트 생성
+                insert_data = [
+                    {
                         "zone": row[0],
                         "site_name": row[1],
                         "ship_name": row[2],
@@ -351,7 +347,16 @@ def crawl_and_save_to_mysql():
                         "fish_name": row[5],
                         "reservation": row[6],
                         "booking_url": row[7]
-                    })
+                    }
+                    for row in site_data
+                ]
+
+                # ✅ 한번에 여러 행 insert
+                conn.execute(text('''
+                    INSERT INTO cruise_schedule 
+                    (zone, site_name, ship_name, date, wave_power, fish_name, reservation, booking_url)
+                    VALUES (:zone, :site_name, :ship_name, :date, :wave_power, :fish_name, :reservation, :booking_url)
+                '''), insert_data)
 
                 transaction.commit()  # ✅ 명시적 커밋
                 print(f"✅ {site_name} 데이터 저장 완료")
