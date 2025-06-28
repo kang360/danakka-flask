@@ -4,6 +4,7 @@ import os
 # 상위 폴더 경로를 sys.path에 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 from app import check_reservation_alerts
 from crawler import run_crawler
 import time
