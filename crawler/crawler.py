@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import pandas as pd
 import sys
-from sites import lukina, rise, ottogi, supernova, bigboss
+from .sites import lukina, rise, ottogi, supernova, bigboss
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
