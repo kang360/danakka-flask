@@ -64,15 +64,9 @@ def connect_postgres():
     database = os.getenv("PG_DATABASE")
     sslmode = os.getenv("PG_SSL", "require")
 
-    conn = psycopg2.connect(
-        user=user,
-        password=password,
-        host=host,
-        port=port,
-        dbname=database,
-        sslmode=sslmode
-    )
-    return conn
+    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    engine = create_engine(url, echo=False)
+    return engine
  
 # ✅ 로그인
 @app.route('/login', methods=['GET', 'POST'])
@@ -81,7 +75,8 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        conn = connect_postgres()
+        engine = connect_postgres()
+        conn = engine.raw_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nickname, email, password_hash FROM users WHERE email=%s", (email,))
         user = cursor.fetchone()
@@ -104,7 +99,9 @@ def mypage():
         return redirect('/login')
 
     user_id = session['user']['id']
-    conn = connect_postgres()
+
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # ✅ 회원 정보 수정 처리
@@ -119,10 +116,12 @@ def mypage():
 
         if not user:
             flash("사용자 정보를 찾을 수 없습니다.", "danger")
+            conn.close()
             return redirect('/mypage')
 
         if not check_password_hash(user['password_hash'], current_password):
             flash("현재 비밀번호가 일치하지 않습니다.", "danger")
+            conn.close()
             return redirect('/mypage')
 
         # ✅ 닉네임 및 비밀번호 변경
@@ -142,13 +141,12 @@ def mypage():
         session['user']['nickname'] = nickname
         flash("회원 정보가 수정되었습니다.", "success")
 
-    # ✅ 예약 알림 조회 (로그인된 사용자)
+    # ✅ 예약 알림 조회
     cursor.execute("SELECT id, user_id, TO_CHAR(date, 'YYYY-MM-DD') AS date, zone, ship_name FROM alarms WHERE user_id = %s ORDER BY date ASC", (user_id,))
     alarms = cursor.fetchall()
     conn.close()
 
     return render_template('mypage.html', user=session['user'], alarms=alarms)
-
 
 
 # ✅ 예약 정보 API
@@ -230,7 +228,8 @@ def register():
 
         hashed_password = generate_password_hash(password)
 
-        conn = connect_postgres()
+        engine = connect_postgres()
+        conn = engine.raw_connection()
         cursor = conn.cursor()
 
         # 이메일과 닉네임 중복 체크
@@ -238,19 +237,20 @@ def register():
         existing_user = cursor.fetchone()
         if existing_user:
             flash("이미 등록된 이메일 또는 닉네임입니다.", "danger")
+            conn.close()
             return redirect('/register')
 
         # 중복이 없을 경우 저장
         cursor.execute("INSERT INTO users (email, nickname, password_hash) VALUES (%s, %s, %s)",
                        (email, nickname, hashed_password))
         conn.commit()
-
-        flash("가입이 완료되었습니다. 로그인해주세요.", "success")
         conn.close()
 
+        flash("가입이 완료되었습니다. 로그인해주세요.", "success")
         return redirect('/login')
 
     return render_template('register.html')
+
 # ✅ 회원 탈퇴
 @app.route('/delete_account', methods=['POST'])
 def delete_account():
@@ -260,8 +260,10 @@ def delete_account():
 
     user_id = session['user']['id']
 
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor()
+
     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()
     conn.close()
@@ -270,6 +272,7 @@ def delete_account():
     flash("회원 탈퇴가 완료되었습니다.", "info")
 
     return redirect('/')
+
 
 
 # 이용약관 페이지
@@ -296,10 +299,14 @@ def reviews():
         user_id = session['user']['id']
         nickname = session['user']['nickname']
 
-        conn = connect_postgres()
+        engine = connect_postgres()
+        conn = engine.raw_connection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO reviews (user_id, nickname, review, created_at) VALUES (%s, %s, %s, NOW())",
-                       (user_id, nickname, review_text))
+
+        cursor.execute(
+            "INSERT INTO reviews (user_id, nickname, review, created_at) VALUES (%s, %s, %s, NOW())",
+            (user_id, nickname, review_text)
+        )
         conn.commit()
         conn.close()
 
@@ -308,7 +315,8 @@ def reviews():
 
     # 후기 조회 (정렬 기준 적용)
     sort = request.args.get('sort', 'latest')
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     if sort == 'popular':
@@ -323,6 +331,7 @@ def reviews():
 
 
 
+
 # ✅ 후기 좋아요
 @app.route('/like_review/<int:review_id>', methods=['POST'])
 def like_review(review_id):
@@ -332,13 +341,15 @@ def like_review(review_id):
 
     user_id = session['user']['id']
 
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor()
 
     # 사용자가 이미 좋아요를 눌렀는지 확인
     cursor.execute("SELECT 1 FROM review_likes WHERE user_id = %s AND review_id = %s", (user_id, review_id))
     if cursor.fetchone():
         flash("이미 좋아요를 누르셨습니다.", "warning")
+        conn.close()
         return redirect('/review')
 
     # 좋아요 기록 저장
@@ -388,7 +399,8 @@ def delete_review(review_id):
         flash("로그인이 필요합니다.", "warning")
         return redirect('/login')
 
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM reviews WHERE id = %s AND user_id = %s", (review_id, session['user']['id']))
     conn.commit()
@@ -419,7 +431,8 @@ def alarm_request():
         if not date or not zone or not ship_name:
             return jsonify({"message": "필수 데이터가 누락되었습니다."}), 400
 
-        conn = connect_postgres()
+        engine = connect_postgres()
+        conn = engine.raw_connection()
         cursor = conn.cursor()
 
         # ✅ 사용자 알림 최대 3개 제한 확인
@@ -465,7 +478,8 @@ def delete_alarm(alarm_id):
     user_id = session['user']['id']
 
     try:
-        conn = connect_postgres()
+        engine = connect_postgres()
+        conn = engine.raw_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM alarms WHERE id = %s AND user_id = %s", (alarm_id, user_id))
         if cursor.rowcount == 0:
@@ -485,7 +499,8 @@ def delete_alarm(alarm_id):
 
 # ✅ 예약 상태 확인 함수
 def check_reservation_status(date, zone, ship_name):
-    conn = connect_postgres()
+    engine = connect_postgres()
+    conn = engine.raw_connection()
     cursor = conn.cursor()
 
     # 예약 상태와 URL 확인 (DB에서 확인)
@@ -527,7 +542,7 @@ def send_alert_email(to_email, date, zone, ship_name, booking_url):
 def check_reservation_alerts():
     engine = connect_postgres()
     conn = engine.raw_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor()
 
     cursor.execute("SELECT id, date, zone, ship_name, email, user_id FROM alarms")
     alarms = cursor.fetchall()
