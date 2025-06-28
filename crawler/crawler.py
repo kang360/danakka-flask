@@ -332,7 +332,7 @@ def crawl_and_save_to_mysql():
             try:
                 # ✅ 첫 번째 사이트일 경우만 전체 데이터 삭제 + ID 초기화
                 if first_site:
-                    conn.execute(text('TRUNCATE TABLE cruise_schedule'))
+                    conn.execute(text('TRUNCATE TABLE cruise_schedule RESTART IDENTITY'))
                     print("✅ 기존 데이터 전체 삭제 및 ID 초기화")
                     first_site = False  # 이후 사이트에서는 삭제하지 않음
 
