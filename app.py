@@ -8,7 +8,7 @@ import threading
 import time
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory, render_template
-from crawler.crawler import run_crawler
+from crawler import run_crawler
 from sqlalchemy import create_engine
 import os
 import psycopg2.extras
