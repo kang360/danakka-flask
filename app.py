@@ -64,9 +64,15 @@ def connect_postgres():
     database = os.getenv("PG_DATABASE")
     sslmode = os.getenv("PG_SSL", "require")
 
-    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
-    engine = create_engine(url, echo=False)
-    return engine
+    conn = psycopg2.connect(
+        user=user,
+        password=password,
+        host=host,
+        port=port,
+        dbname=database,
+        sslmode=sslmode
+    )
+    return conn
  
 # ✅ 로그인
 @app.route('/login', methods=['GET', 'POST'])
@@ -75,18 +81,19 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        
         conn = connect_postgres()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute("SELECT id, nickname, email, password FROM users WHERE email=%s", (email,))
+        cursor.execute("SELECT id, nickname, email, password_hash FROM users WHERE email=%s", (email,))
         user = cursor.fetchone()
 
-        if user and check_password_hash(user['password'], password):
+        if user and check_password_hash(user['password_hash'], password):
             session['user'] = {'id': user['id'], 'email': user['email'], 'nickname': user['nickname']}
             flash("로그인 성공!", "success")
+            conn.close()
             return redirect('/mypage')
         else:
             flash("이메일 또는 비밀번호가 일치하지 않습니다.", "danger")
+            conn.close()
 
     return render_template('login.html')
 
