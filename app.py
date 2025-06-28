@@ -542,7 +542,7 @@ def send_alert_email(to_email, date, zone, ship_name, booking_url):
 def check_reservation_alerts():
     engine = connect_postgres()
     conn = engine.raw_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     cursor.execute("SELECT id, date, zone, ship_name, email, user_id FROM alarms")
     alarms = cursor.fetchall()
